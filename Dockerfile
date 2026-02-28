@@ -11,5 +11,7 @@ FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/pulse /pulse
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/pulse", "--version"]
 ENTRYPOINT ["/pulse"]
 CMD ["--config", "/config.yaml"]

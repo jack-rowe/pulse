@@ -151,14 +151,19 @@ func main() {
 	}()
 
 	// Start API server
-	srv := api.NewServer(db, cfg.Endpoints, cfg.Server.APIKey)
+	handler := api.NewServer(db, cfg.Endpoints, cfg.Server.APIKey)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 
 	go func() {
 		slog.Info("status API listening", "addr", addr)
-		if err := http.ListenAndServe(addr, srv); err != nil {
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
-			os.Exit(1)
 		}
 	}()
 
@@ -169,5 +174,11 @@ func main() {
 
 	slog.Info("shutting down")
 	cancel()
-	time.Sleep(500 * time.Millisecond) // brief grace period for goroutines
+
+	// Graceful HTTP shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("http shutdown error", "error", err)
+	}
 }

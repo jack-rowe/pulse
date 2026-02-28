@@ -4,9 +4,17 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	// validName allows alphanumeric, spaces, hyphens, dots, underscores. Max 100 chars.
+	validNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 _.\-]{0,99}$`)
+	// envVarRe matches ${VAR_NAME} for environment variable expansion.
+	envVarRe = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}`)
 )
 
 // Config is the top-level configuration for Pulse.
@@ -90,12 +98,27 @@ type StorageConfig struct {
 	RetentionDays int    `yaml:"retention_days"` // auto-cleanup older than N days (default: 90)
 }
 
+// expandEnvVars replaces ${VAR_NAME} references with their environment variable values.
+func expandEnvVars(data []byte) []byte {
+	return envVarRe.ReplaceAllFunc(data, func(match []byte) []byte {
+		varName := envVarRe.FindSubmatch(match)[1]
+		if val, ok := os.LookupEnv(string(varName)); ok {
+			return []byte(val)
+		}
+		return match // leave unresolved vars as-is
+	})
+}
+
 // Load reads and parses a YAML config file.
+// Supports ${ENV_VAR} expansion for secrets.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	}
+
+	// Expand environment variables before parsing
+	data = expandEnvVars(data)
 
 	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -149,6 +172,9 @@ func validate(cfg *Config) error {
 	for i, ep := range cfg.Endpoints {
 		if ep.Name == "" {
 			return fmt.Errorf("endpoint %d: name is required", i)
+		}
+		if !validNameRe.MatchString(ep.Name) {
+			return fmt.Errorf("endpoint %d: name %q must be 1-100 chars, alphanumeric/spaces/hyphens/dots/underscores, starting with alphanumeric", i, ep.Name)
 		}
 		if seen[ep.Name] {
 			return fmt.Errorf("endpoint %d: duplicate name %q", i, ep.Name)

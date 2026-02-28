@@ -4,9 +4,9 @@ package api
 import (
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jack-rowe/pulse/config"
@@ -178,6 +178,11 @@ func (s *Server) handleEndpointStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	limit := 50 // default
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 500 {
+			limit = v
+		}
+	}
 
 	history, err := s.store.GetHistory(name, limit)
 	if err != nil {
@@ -198,14 +203,14 @@ func (s *Server) handleTimeline(w http.ResponseWriter, r *http.Request) {
 	hours := 24
 	numBuckets := 90
 
-	// Allow query params to override
+	// Allow query params to override (capped to retention window)
 	if h := r.URL.Query().Get("hours"); h != "" {
-		if v, err := parsePositiveInt(h); err == nil {
+		if v, err := strconv.Atoi(h); err == nil && v > 0 && v <= 720 {
 			hours = v
 		}
 	}
 	if b := r.URL.Query().Get("buckets"); b != "" {
-		if v, err := parsePositiveInt(b); err == nil && v <= 200 {
+		if v, err := strconv.Atoi(b); err == nil && v > 0 && v <= 200 {
 			numBuckets = v
 		}
 	}
@@ -239,18 +244,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)
-}
-
-func parsePositiveInt(s string) (int, error) {
-	var n int
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("not a number")
-		}
-		n = n*10 + int(c-'0')
-	}
-	if n <= 0 {
-		return 0, fmt.Errorf("must be positive")
-	}
-	return n, nil
 }

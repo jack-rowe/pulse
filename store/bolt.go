@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -201,7 +202,7 @@ func (s *BoltStore) PurgeOlderThan(before time.Time) (int, error) {
 			c := epBucket.Cursor()
 			for key, _ := c.First(); key != nil; key, _ = c.Next() {
 				// Keys are time-ordered; stop once we're past cutoff
-				if bytesCompare(key, beforeKey) >= 0 {
+				if bytes.Compare(key, beforeKey) >= 0 {
 					break
 				}
 				if err := c.Delete(); err != nil {
@@ -310,23 +311,4 @@ func timeToKey(t time.Time) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, uint64(t.UnixNano()))
 	return b
-}
-
-// bytesCompare compares two byte slices lexicographically.
-func bytesCompare(a, b []byte) int {
-	for i := 0; i < len(a) && i < len(b); i++ {
-		if a[i] < b[i] {
-			return -1
-		}
-		if a[i] > b[i] {
-			return 1
-		}
-	}
-	if len(a) < len(b) {
-		return -1
-	}
-	if len(a) > len(b) {
-		return 1
-	}
-	return 0
 }
