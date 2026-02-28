@@ -1,0 +1,24 @@
+[Unit]
+Description=Pulse Uptime Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pulse
+Group=pulse
+ExecStart=/usr/local/bin/pulse --config /etc/pulse/config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pulse
+WorkingDirectory=/var/lib/pulse
+
+[Install]
+WantedBy=multi-user.target

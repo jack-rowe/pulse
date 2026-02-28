@@ -1,0 +1,6 @@
+pulse.db
+pulse
+pulse-*
+*.exe
+config.yaml
+.env

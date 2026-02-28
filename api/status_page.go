@@ -1,0 +1,351 @@
+package api
+
+// statusPageHTML is the embedded status page served at /.
+const statusPageHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse — Status</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #e0e0e0; padding: 2rem 1rem; }
+  .container { max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; color: #fff; }
+  .subtitle { color: #666; font-size: 0.8rem; margin-bottom: 2rem; }
+  
+  /* Overall banner */
+  .overall { padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 2rem; font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.75rem; }
+  .overall .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .overall.up { background: #052e16; color: #4ade80; border: 1px solid #16a34a33; }
+  .overall.up .dot { background: #4ade80; box-shadow: 0 0 8px #4ade8066; }
+  .overall.down { background: #2d0f0f; color: #f87171; border: 1px solid #dc262633; }
+  .overall.down .dot { background: #f87171; box-shadow: 0 0 8px #f8717166; }
+  .overall.partial { background: #1c1305; color: #fbbf24; border: 1px solid #d97706; }
+  .overall.partial .dot { background: #fbbf24; box-shadow: 0 0 8px #fbbf2466; }
+  .overall.loading { background: #18181b; color: #888; border: 1px solid #27272a; }
+  .overall.loading .dot { background: #888; }
+
+  /* Endpoint card */
+  .endpoint-card { background: #18181b; border: 1px solid #27272a; border-radius: 10px; margin-bottom: 0.75rem; overflow: hidden; transition: border-color 0.15s; }
+  .endpoint-card:hover { border-color: #3f3f46; }
+  .ep-header { padding: 1rem 1.25rem; cursor: pointer; user-select: none; }
+  .ep-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+  .ep-name { font-weight: 500; color: #fafafa; font-size: 0.95rem; }
+  .ep-right { display: flex; align-items: center; gap: 0.75rem; }
+  .ep-latency { font-size: 0.8rem; color: #71717a; font-variant-numeric: tabular-nums; }
+  .ep-uptime-text { font-size: 0.8rem; color: #71717a; font-variant-numeric: tabular-nums; }
+  .badge { padding: 0.2rem 0.65rem; border-radius: 100px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge.up { background: #052e16; color: #4ade80; }
+  .badge.down { background: #2d0f0f; color: #f87171; }
+  .badge.unknown { background: #27272a; color: #71717a; }
+
+  /* Timeline bar */
+  .timeline { display: flex; gap: 1px; height: 32px; align-items: flex-end; }
+  .timeline-bar { flex: 1; min-width: 2px; border-radius: 2px; position: relative; cursor: pointer; transition: opacity 0.1s; }
+  .timeline-bar:hover { opacity: 0.8; }
+  .timeline-bar.up { background: #22c55e; }
+  .timeline-bar.down { background: #ef4444; }
+  .timeline-bar.degraded { background: #f59e0b; }
+  .timeline-bar.empty { background: #27272a; }
+  .timeline-labels { display: flex; justify-content: space-between; margin-top: 0.35rem; }
+  .timeline-labels span { font-size: 0.65rem; color: #52525b; }
+
+  /* Tooltip */
+  .tooltip { position: fixed; background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #d4d4d8; pointer-events: none; z-index: 100; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: none; }
+  .tooltip .tt-status { font-weight: 600; margin-bottom: 0.15rem; }
+  .tooltip .tt-status.up { color: #4ade80; }
+  .tooltip .tt-status.down { color: #f87171; }
+  .tooltip .tt-status.degraded { color: #fbbf24; }
+
+  /* Expanded detail */
+  .ep-detail { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .ep-detail.open { max-height: 600px; }
+  .ep-detail-inner { padding: 0 1.25rem 1.25rem 1.25rem; border-top: 1px solid #27272a; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+  .stat-box { background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 0.75rem; }
+  .stat-label { font-size: 0.65rem; color: #52525b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+  .stat-value { font-size: 1.1rem; font-weight: 600; color: #fafafa; font-variant-numeric: tabular-nums; }
+  .stat-value.green { color: #4ade80; }
+  .stat-value.red { color: #f87171; }
+  .stat-value.yellow { color: #fbbf24; }
+  
+  /* Latency chart */
+  .latency-chart { margin-top: 1rem; }
+  .latency-chart-label { font-size: 0.7rem; color: #52525b; margin-bottom: 0.5rem; }
+  .latency-bars { display: flex; gap: 1px; height: 40px; align-items: flex-end; }
+  .lat-bar { flex: 1; min-width: 2px; background: #3b82f6; border-radius: 1px 1px 0 0; transition: opacity 0.1s; }
+  .lat-bar:hover { opacity: 0.7; }
+  .lat-bar.high { background: #f59e0b; }
+  .lat-bar.critical { background: #ef4444; }
+
+  /* Recent checks list */
+  .recent-checks { margin-top: 1rem; }
+  .recent-label { font-size: 0.7rem; color: #52525b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+  .check-row { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid #1e1e22; font-size: 0.75rem; }
+  .check-row:last-child { border-bottom: none; }
+  .check-time { color: #52525b; font-variant-numeric: tabular-nums; }
+  .check-info { display: flex; gap: 0.75rem; align-items: center; }
+  .check-lat { color: #71717a; font-variant-numeric: tabular-nums; }
+  .check-status { font-weight: 600; }
+  .check-status.up { color: #4ade80; }
+  .check-status.down { color: #f87171; }
+  .check-error { color: #f87171; font-size: 0.7rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .footer { margin-top: 2.5rem; text-align: center; font-size: 0.7rem; color: #3f3f46; }
+  .footer a { color: #52525b; text-decoration: none; }
+  .footer a:hover { color: #71717a; }
+  .refresh-note { font-size: 0.7rem; color: #3f3f46; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>System Status</h1>
+  <p class="subtitle">Powered by Pulse &mdash; <span class="refresh-note">auto-refreshes every 15s</span></p>
+  <div id="overall" class="overall loading"><span class="dot"></span> Loading...</div>
+  <div id="endpoints"></div>
+  <div class="footer">
+    <a href="https://github.com/jack-rowe/pulse" target="_blank">Pulse — Open Source Uptime Monitor</a>
+  </div>
+</div>
+<div id="tooltip" class="tooltip"></div>
+
+<script>
+let expandedEndpoints = {};
+let timelineCache = {};
+let historyCache = {};
+
+async function fetchStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    if (!resp.ok) throw new Error('API error');
+    const data = await resp.json();
+    renderOverall(data.endpoints || []);
+    renderEndpoints(data.endpoints || []);
+  } catch (e) {
+    document.getElementById('overall').innerHTML = '<span class="dot"></span> Failed to load status';
+    document.getElementById('overall').className = 'overall loading';
+  }
+}
+
+function renderOverall(endpoints) {
+  const overall = document.getElementById('overall');
+  const up = endpoints.filter(e => e.status === 'up').length;
+  const total = endpoints.length;
+  
+  if (up === total) {
+    overall.innerHTML = '<span class="dot"></span> All systems operational';
+    overall.className = 'overall up';
+  } else if (up === 0) {
+    overall.innerHTML = '<span class="dot"></span> Major outage detected';
+    overall.className = 'overall down';
+  } else {
+    overall.innerHTML = '<span class="dot"></span> ' + (total - up) + ' system' + (total - up > 1 ? 's' : '') + ' experiencing issues';
+    overall.className = 'overall partial';
+  }
+}
+
+function renderEndpoints(endpoints) {
+  const container = document.getElementById('endpoints');
+  container.innerHTML = endpoints.map(ep => {
+    const sc = ep.status === 'up' ? 'up' : ep.status === 'down' ? 'down' : 'unknown';
+    const lat = ep.latency_ms ? ep.latency_ms.toFixed(0) + 'ms' : '—';
+    const upt = ep.uptime_percent ? ep.uptime_percent.toFixed(2) + '%' : '—';
+    const expanded = expandedEndpoints[ep.name];
+    
+    return '<div class="endpoint-card" id="card-' + slugify(ep.name) + '">' +
+      '<div class="ep-header" onclick="toggleDetail(\'' + esc(ep.name) + '\')">' +
+        '<div class="ep-top">' +
+          '<span class="ep-name">' + esc(ep.name) + '</span>' +
+          '<div class="ep-right">' +
+            '<span class="ep-uptime-text">' + upt + '</span>' +
+            '<span class="ep-latency">' + lat + '</span>' +
+            '<span class="badge ' + sc + '">' + ep.status + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="timeline" id="tl-' + slugify(ep.name) + '"></div>' +
+        '<div class="timeline-labels"><span>24 hours ago</span><span>Now</span></div>' +
+      '</div>' +
+      '<div class="ep-detail' + (expanded ? ' open' : '') + '" id="detail-' + slugify(ep.name) + '">' +
+        '<div class="ep-detail-inner">' +
+          renderStats(ep) +
+          '<div class="latency-chart" id="latchart-' + slugify(ep.name) + '"></div>' +
+          '<div class="recent-checks" id="recent-' + slugify(ep.name) + '"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // Load timelines for all endpoints
+  endpoints.forEach(ep => loadTimeline(ep.name));
+}
+
+function renderStats(ep) {
+  const uptColor = ep.uptime_percent >= 99.9 ? 'green' : ep.uptime_percent >= 99 ? 'yellow' : 'red';
+  const upt7d = ep.uptime_7d ? ep.uptime_7d.toFixed(3) + '%' : '—';
+  const upt30d = ep.uptime_30d ? ep.uptime_30d.toFixed(3) + '%' : '—';
+  const lastDown = ep.last_down_at ? timeAgo(new Date(ep.last_down_at)) : 'Never';
+  
+  return '<div class="stats-grid">' +
+    statBox('Uptime (24h)', (ep.uptime_percent || 0).toFixed(3) + '%', uptColor) +
+    statBox('Uptime (7d)', upt7d, '') +
+    statBox('Uptime (30d)', upt30d, '') +
+    statBox('Avg Latency', (ep.avg_latency_ms || 0).toFixed(0) + 'ms', '') +
+    statBox('Min / Max', (ep.min_latency_ms || 0).toFixed(0) + ' / ' + (ep.max_latency_ms || 0).toFixed(0) + 'ms', '') +
+    statBox('Checks (24h)', ep.total_checks || 0, '') +
+    statBox('Failures', ep.total_failures || 0, ep.total_failures > 0 ? 'red' : 'green') +
+    statBox('Last Down', lastDown, '') +
+  '</div>';
+}
+
+function statBox(label, value, colorClass) {
+  return '<div class="stat-box">' +
+    '<div class="stat-label">' + label + '</div>' +
+    '<div class="stat-value ' + colorClass + '">' + value + '</div>' +
+  '</div>';
+}
+
+async function loadTimeline(name) {
+  try {
+    const resp = await fetch('/api/timeline/' + encodeURIComponent(name) + '?hours=24&buckets=90');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    timelineCache[name] = data.buckets;
+    renderTimeline(name, data.buckets);
+    
+    if (expandedEndpoints[name]) {
+      renderLatencyChart(name, data.buckets);
+    }
+  } catch(e) {}
+}
+
+function renderTimeline(name, buckets) {
+  const el = document.getElementById('tl-' + slugify(name));
+  if (!el) return;
+  
+  el.innerHTML = buckets.map((b, i) => {
+    const h = b.status === 'empty' ? '4px' : '100%';
+    return '<div class="timeline-bar ' + b.status + '" style="height:' + h + '" ' +
+      'data-idx="' + i + '" data-name="' + esc(name) + '" ' +
+      'onmouseenter="showTooltip(event, this)" onmouseleave="hideTooltip()"></div>';
+  }).join('');
+}
+
+function renderLatencyChart(name, buckets) {
+  const el = document.getElementById('latchart-' + slugify(name));
+  if (!el) return;
+  
+  const maxLat = Math.max(...buckets.map(b => b.avg_latency_ms || 0), 1);
+  
+  el.innerHTML = '<div class="latency-chart-label">Response Time (24h)</div>' +
+    '<div class="latency-bars">' +
+    buckets.map(b => {
+      if (!b.avg_latency_ms) return '<div class="lat-bar" style="height:2px"></div>';
+      const pct = Math.max(5, (b.avg_latency_ms / maxLat) * 100);
+      const cls = b.avg_latency_ms > 2000 ? 'critical' : b.avg_latency_ms > 500 ? 'high' : '';
+      return '<div class="lat-bar ' + cls + '" style="height:' + pct + '%"></div>';
+    }).join('') +
+    '</div>';
+}
+
+async function loadHistory(name) {
+  try {
+    const resp = await fetch('/api/history/' + encodeURIComponent(name) + '?limit=10');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    historyCache[name] = data.records;
+    renderHistory(name, data.records || []);
+  } catch(e) {}
+}
+
+function renderHistory(name, records) {
+  const el = document.getElementById('recent-' + slugify(name));
+  if (!el) return;
+  
+  if (records.length === 0) {
+    el.innerHTML = '<div class="recent-label">Recent Checks</div><div style="color:#52525b;font-size:0.75rem">No data yet</div>';
+    return;
+  }
+  
+  el.innerHTML = '<div class="recent-label">Recent Checks</div>' +
+    records.slice(0, 10).map(r => {
+      const t = new Date(r.timestamp);
+      const sc = r.status === 0 ? 'up' : 'down';
+      const statusText = r.status === 0 ? 'UP' : 'DOWN';
+      const errorHtml = r.error ? '<span class="check-error" title="' + esc(r.error) + '">' + esc(r.error) + '</span>' : '';
+      return '<div class="check-row">' +
+        '<span class="check-time">' + t.toLocaleTimeString() + '</span>' +
+        '<div class="check-info">' +
+          errorHtml +
+          (r.status_code ? '<span class="check-lat">' + r.status_code + '</span>' : '') +
+          '<span class="check-lat">' + (r.latency_ms || 0).toFixed(0) + 'ms</span>' +
+          '<span class="check-status ' + sc + '">' + statusText + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function toggleDetail(name) {
+  const el = document.getElementById('detail-' + slugify(name));
+  if (!el) return;
+  
+  expandedEndpoints[name] = !expandedEndpoints[name];
+  
+  if (expandedEndpoints[name]) {
+    el.classList.add('open');
+    if (timelineCache[name]) renderLatencyChart(name, timelineCache[name]);
+    loadHistory(name);
+  } else {
+    el.classList.remove('open');
+  }
+}
+
+function showTooltip(event, bar) {
+  const name = bar.dataset.name;
+  const idx = parseInt(bar.dataset.idx);
+  const buckets = timelineCache[name];
+  if (!buckets || !buckets[idx]) return;
+  
+  const b = buckets[idx];
+  const tt = document.getElementById('tooltip');
+  const start = new Date(b.start);
+  const end = new Date(b.end);
+  const timeStr = start.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' — ' + end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  
+  let statusLabel = b.status.charAt(0).toUpperCase() + b.status.slice(1);
+  if (b.status === 'empty') statusLabel = 'No data';
+  
+  tt.innerHTML = '<div class="tt-status ' + b.status + '">' + statusLabel + '</div>' +
+    '<div>' + timeStr + '</div>' +
+    (b.total_checks > 0 ? '<div>' + b.total_checks + ' checks, ' + b.failures + ' failed</div>' : '') +
+    (b.avg_latency_ms > 0 ? '<div>Avg: ' + b.avg_latency_ms.toFixed(0) + 'ms</div>' : '');
+  
+  tt.style.display = 'block';
+  const rect = bar.getBoundingClientRect();
+  tt.style.left = (rect.left + rect.width/2 - tt.offsetWidth/2) + 'px';
+  tt.style.top = (rect.top - tt.offsetHeight - 8) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function slugify(s) { return s.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function timeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  if (seconds < 60) return seconds + 's ago';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + 'm ago';
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.floor(hours / 24);
+  return days + 'd ago';
+}
+
+fetchStatus();
+setInterval(fetchStatus, 15000);
+</script>
+</body>
+</html>`
