@@ -331,7 +331,7 @@ function hideTooltip() {
 }
 
 function slugify(s) { return s.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(); }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function timeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);

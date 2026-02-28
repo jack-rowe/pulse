@@ -1,6 +1,30 @@
-pulse.db
+# Build output
+build/
+*.exe
 pulse
 pulse-*
-*.exe
+
+# Runtime data
+*.db
+
+# Config (contains secrets)
 config.yaml
+
+# Environment
 .env
+.env.*
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go
+vendor/
