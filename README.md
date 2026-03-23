@@ -96,6 +96,7 @@ storage:
 | `GET /api/history/{name}` | Recent check history                     |
 
 If `api_key` is set in config, pass it as `X-API-Key` header or `?api_key=` query param.
+For the built-in dashboard with auth enabled, open `/?api_key=your-secret` in your browser.
 
 ## CLI
 
@@ -138,6 +139,16 @@ docker run -d \
   -v $(pwd)/config.yaml:/config.yaml \
   -p 8080:8080 \
   pulse:latest
+```
+
+### Docker Compose
+
+```bash
+# Generate config.yaml in this directory
+docker compose run --rm pulse --init
+
+# Edit config.yaml, then start
+docker compose up -d
 ```
 
 ## Build from Source

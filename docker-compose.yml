@@ -1,0 +1,14 @@
+services:
+  pulse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pulse:latest
+    container_name: pulse
+    working_dir: /work
+    command: ["--config", "/work/config.yaml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/work
+    restart: unless-stopped

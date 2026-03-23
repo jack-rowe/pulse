@@ -52,6 +52,9 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.apiKey != "" {
 			key := r.Header.Get("X-API-Key")
+			if key == "" {
+				key = r.URL.Query().Get("api_key")
+			}
 			if subtle.ConstantTimeCompare([]byte(key), []byte(s.apiKey)) != 1 {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return

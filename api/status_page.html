@@ -394,10 +394,20 @@
       let expandedEndpoints = {};
       let timelineCache = {};
       let historyCache = {};
+      const pageQuery = new URLSearchParams(window.location.search);
+      const apiKey = pageQuery.get("api_key");
+
+      function apiFetch(path) {
+        const url = new URL(path, window.location.origin);
+        if (apiKey) {
+          url.searchParams.set("api_key", apiKey);
+        }
+        return fetch(url.toString());
+      }
 
       async function fetchStatus() {
         try {
-          const resp = await fetch("/api/status");
+          const resp = await apiFetch("/api/status");
           if (!resp.ok) throw new Error("API error");
           const data = await resp.json();
           renderOverall(data.endpoints || []);
@@ -565,7 +575,7 @@
 
       async function loadTimeline(name) {
         try {
-          const resp = await fetch(
+          const resp = await apiFetch(
             "/api/timeline/" +
               encodeURIComponent(name) +
               "?hours=24&buckets=90",
@@ -642,7 +652,7 @@
 
       async function loadHistory(name) {
         try {
-          const resp = await fetch(
+          const resp = await apiFetch(
             "/api/history/" + encodeURIComponent(name) + "?limit=10",
           );
           if (!resp.ok) return;

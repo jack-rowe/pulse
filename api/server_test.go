@@ -260,6 +260,19 @@ func TestAuthValidKey(t *testing.T) {
 	}
 }
 
+func TestAuthValidKeyQueryParam(t *testing.T) {
+	db := newTestStore(t)
+	srv := NewServer(db, testEndpoints, "my-secret")
+
+	req := httptest.NewRequest("GET", "/api/status?api_key=my-secret", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with valid query api_key, got %d", w.Code)
+	}
+}
+
 func TestAuthInvalidKey(t *testing.T) {
 	db := newTestStore(t)
 	srv := NewServer(db, testEndpoints, "my-secret")
@@ -271,6 +284,19 @@ func TestAuthInvalidKey(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 with wrong key, got %d", w.Code)
+	}
+}
+
+func TestAuthInvalidKeyQueryParam(t *testing.T) {
+	db := newTestStore(t)
+	srv := NewServer(db, testEndpoints, "my-secret")
+
+	req := httptest.NewRequest("GET", "/api/status?api_key=wrong-key", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong query api_key, got %d", w.Code)
 	}
 }
 

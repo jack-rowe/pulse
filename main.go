@@ -19,10 +19,14 @@ import (
 	"github.com/jack-rowe/pulse/store"
 )
 
-// Set at build time via -ldflags
+// Set at build time via -ldflags.
 var version = "dev"
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// CLI flags
 	configPath := flag.String("config", "config.yaml", "Path to config file")
 	initConfig := flag.Bool("init", false, "Generate a default config.yaml and exit")
@@ -33,17 +37,17 @@ func main() {
 
 	if *showVersion {
 		fmt.Printf("pulse %s\n", version)
-		os.Exit(0)
+		return 0
 	}
 
 	// --init: write example config
 	if *initConfig {
 		if err := os.WriteFile("config.yaml", []byte(config.GenerateDefault()), 0644); err != nil {
 			slog.Error("failed to write config", "error", err)
-			os.Exit(1)
+			return 1
 		}
-		fmt.Println("Created config.yaml — edit it with your endpoints and run again.")
-		os.Exit(0)
+		fmt.Println("Created config.yaml - edit it with your endpoints and run again.")
+		return 0
 	}
 
 	// Set up structured logging
@@ -57,12 +61,12 @@ func main() {
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		slog.Error("config error", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	if *validateOnly {
-		fmt.Printf("Config OK — %d endpoints defined\n", len(cfg.Endpoints))
-		os.Exit(0)
+		fmt.Printf("Config OK - %d endpoints defined\n", len(cfg.Endpoints))
+		return 0
 	}
 
 	slog.Info("starting pulse", "version", version, "endpoints", len(cfg.Endpoints))
@@ -71,7 +75,7 @@ func main() {
 	db, err := store.NewBolt(cfg.Storage.Path)
 	if err != nil {
 		slog.Error("failed to init store", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer db.Close()
 
@@ -112,7 +116,7 @@ func main() {
 			chk = checker.NewWebSocket(ep.URL, ep.Timeout())
 		default:
 			slog.Error("unknown check type", "endpoint", ep.Name, "type", ep.Type)
-			os.Exit(1)
+			return 1
 		}
 		targets = append(targets, scheduler.Target{
 			Name:          ep.Name,
@@ -159,26 +163,37 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	serverErr := make(chan error, 1)
 
 	go func() {
 		slog.Info("status API listening", "addr", addr)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
+			serverErr <- err
 		}
 	}()
 
-	// Block until SIGINT/SIGTERM
+	// Block until SIGINT/SIGTERM or server failure.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	defer signal.Stop(sig)
 
-	slog.Info("shutting down")
+	exitCode := 0
+	select {
+	case <-sig:
+		slog.Info("shutting down")
+	case err := <-serverErr:
+		slog.Error("server error", "error", err)
+		exitCode = 1
+	}
 	cancel()
 
 	// Graceful HTTP shutdown with timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
-	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil && err != http.ErrServerClosed {
 		slog.Error("http shutdown error", "error", err)
+		exitCode = 1
 	}
+
+	return exitCode
 }
